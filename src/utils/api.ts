@@ -141,9 +141,16 @@ export async function fetchBakeryProducts(): Promise<ApiProductResponse> {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    const data: ApiProductResponse = await response.json();
-    if (data && data.success && data.categories) {
-      return data;
+    const data = await response.json();
+    if (data && typeof data === 'object') {
+      return {
+        ...BACKUP_PRODUCTS_DATA,
+        ...data,
+        categories:
+          data.categories && Object.keys(data.categories).length > 0
+            ? data.categories
+            : BACKUP_PRODUCTS_DATA.categories,
+      };
     }
     return BACKUP_PRODUCTS_DATA;
   } catch (error) {

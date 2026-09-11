@@ -46,8 +46,8 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
-  // Live updates & polling state
-  const [appVersion, setAppVersion] = useState<string | null>(null);
+  // Live updates & polling state (Requirement 1)
+  const [storedVersion, setStoredVersion] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState<AnnouncementData | null>(null);
   const [isAnnouncementPopupOpen, setIsAnnouncementPopupOpen] = useState<boolean>(false);
   const [isPersistentBannerVisible, setIsPersistentBannerVisible] = useState<boolean>(false);
@@ -89,8 +89,8 @@ export default function App() {
   }, [isPaymentProcessing]);
 
   useEffect(() => {
-    versionRef.current = appVersion;
-  }, [appVersion]);
+    versionRef.current = storedVersion;
+  }, [storedVersion]);
 
   // Sync cart to localStorage
   useEffect(() => {
@@ -101,40 +101,16 @@ export default function App() {
     }
   }, [cart]);
 
-  // Silent refetch to update UI in-place without page reload or disruption
-  const silentRefetch = async (newVer?: string | null) => {
+  // Initial Fetch on page load (Requirement 1: Store version in state)
+  const loadProducts = async () => {
+    setIsLoading(true);
+    setFetchError(null);
     try {
       const res = await fetchBakeryProducts();
       if (res) {
         if (res.categories && Object.keys(res.categories).length > 0) {
           setCategories(res.categories);
         }
-        if (res.announcement !== undefined) {
-          const normAnn = normalizeAnnouncement(res.announcement);
-          setAnnouncement(normAnn);
-        }
-        if (res.shutdown !== undefined) {
-          setShutdown(res.shutdown);
-        }
-        const updatedVer = newVer || (res.version !== undefined ? String(res.version) : null);
-        if (updatedVer !== null) {
-          versionRef.current = updatedVer;
-          setAppVersion(updatedVer);
-        }
-      }
-    } catch (err) {
-      console.warn('Silent live refresh failed:', err);
-    }
-  };
-
-  // Initial Fetch on page load
-  const loadProducts = async () => {
-    setIsLoading(true);
-    setFetchError(null);
-    try {
-      const res = await fetchBakeryProducts();
-      if (res && res.categories && Object.keys(res.categories).length > 0) {
-        setCategories(res.categories);
         if (res.announcement !== undefined) {
           const normAnn = normalizeAnnouncement(res.announcement);
           setAnnouncement(normAnn);
@@ -146,14 +122,14 @@ export default function App() {
         if (res.shutdown !== undefined) {
           setShutdown(res.shutdown);
         }
-        // Baseline version stored on first load
+        // 1. Store the current version number in a state variable when the app first loads
         if (res.version !== undefined && res.version !== null) {
           const v = String(res.version);
           versionRef.current = v;
-          setAppVersion(v);
+          setStoredVersion(v);
         }
       } else {
-        throw new Error('No bakery categories received.');
+        throw new Error('No bakery data received.');
       }
     } catch (err: any) {
       console.error('Failed to load products:', err);
@@ -167,30 +143,90 @@ export default function App() {
     loadProducts();
   }, []);
 
-  // Requirement 3: Automatic live data refresh every 8 seconds (paused during checkout/payment)
+  // Requirements 2, 3, 4, 5, 6: Automatic data refresh polling every 8 seconds
   useEffect(() => {
     const interval = setInterval(async () => {
-      // Pause polling entirely once customer opens checkout or Razorpay popup
+      // Pause polling during active checkout or payment processing
       if (isCheckoutOpenRef.current || isPaymentProcessingRef.current) {
         return;
       }
 
       try {
-        const latestVersion = await fetchApiVersion();
-        if (latestVersion === null) return;
+        // 2. On each poll (every 8 seconds), fetch version endpoint and parse "version" field
+        const res = await fetch(
+          'https://script.google.com/macros/s/AKfycbwPFgnfouW9nIs31hIvSSZ_tgQCySy9SCwmDXTdvqBQLyGR6qG7UpmCoBX4_OzGZWOO/exec?action=version',
+          {
+            method: 'GET',
+            headers: { Accept: 'application/json' },
+            cache: 'no-store',
+          }
+        );
 
-        // Double check pause state before executing update
-        if (isCheckoutOpenRef.current || isPaymentProcessingRef.current) {
-          return;
-        }
+        if (!res.ok) return;
 
-        const currentKnown = versionRef.current;
-        if (currentKnown !== null && String(latestVersion) !== String(currentKnown)) {
-          console.log(`Live data version changed from ${currentKnown} to ${latestVersion}. Silently refetching data...`);
-          await silentRefetch(String(latestVersion));
+        const data = await res.json();
+        const fetchedVersion =
+          data && data.version !== undefined && data.version !== null
+            ? String(data.version)
+            : null;
+
+        const currentStoredVersion = versionRef.current;
+
+        // 6. Console log at the top of the polling function that prints current stored and newly fetched versions
+        console.log('Current stored version:', currentStoredVersion, 'Newly fetched version:', fetchedVersion);
+
+        if (fetchedVersion === null) return;
+
+        // 3. Compare this newly fetched version to the stored version number using a simple not-equal comparison
+        if (currentStoredVersion !== null && fetchedVersion !== currentStoredVersion) {
+          // 5. Console log statement right before step 4a
+          console.log('Version changed, refetching data');
+
+          // 4a. Fetch the full data from https://script.google.com/macros/s/AKfycbwPFgnfouW9nIs31hIvSSZ_tgQCySy9SCwmDXTdvqBQLyGR6qG7UpmCoBX4_OzGZWOO/exec (no query parameters)
+          const fullRes = await fetch(
+            'https://script.google.com/macros/s/AKfycbwPFgnfouW9nIs31hIvSSZ_tgQCySy9SCwmDXTdvqBQLyGR6qG7UpmCoBX4_OzGZWOO/exec',
+            {
+              method: 'GET',
+              headers: { Accept: 'application/json' },
+              cache: 'no-store',
+            }
+          );
+
+          if (fullRes.ok) {
+            const fullData = await fullRes.json();
+            if (fullData) {
+              // 4b. Update the products state, shutdown state, and announcement state with this new data
+              if (fullData.categories && Object.keys(fullData.categories).length > 0) {
+                setCategories(fullData.categories);
+              }
+              if (fullData.shutdown !== undefined) {
+                setShutdown(fullData.shutdown);
+              }
+              if (fullData.announcement !== undefined) {
+                const normAnn = normalizeAnnouncement(fullData.announcement);
+                setAnnouncement(normAnn);
+                if (normAnn === null) {
+                  setIsAnnouncementPopupOpen(false);
+                  setIsPersistentBannerVisible(false);
+                }
+              }
+
+              // 4c. Update the stored version number to match the new version
+              const updatedVer =
+                fullData.version !== undefined && fullData.version !== null
+                  ? String(fullData.version)
+                  : fetchedVersion;
+              versionRef.current = updatedVer;
+              setStoredVersion(updatedVer);
+            }
+          }
+        } else if (currentStoredVersion === null && fetchedVersion !== null) {
+          // If stored version was not yet recorded, initialize it
+          versionRef.current = fetchedVersion;
+          setStoredVersion(fetchedVersion);
         }
       } catch (err) {
-        console.warn('Live version check error:', err);
+        console.warn('Polling version check error:', err);
       }
     }, 8000);
 
