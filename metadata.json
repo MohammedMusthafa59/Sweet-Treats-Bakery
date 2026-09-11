@@ -1,0 +1,6 @@
+{
+  "name": "Sweet Treats Bakery",
+  "description": "Artisanal bakery ordering system featuring fresh cakes, biscuits, drinks, interactive cart, WhatsApp order handoff, and customer policies.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
