@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Product, CartItem, OrderConfirmationDetails, PolicyType } from './types';
-import { fetchBakeryProducts } from './utils/api';
+import { Product, CartItem, OrderConfirmationDetails, PolicyType, ShutdownStatus } from './types';
+import { fetchBakeryProducts, fetchApiVersion } from './utils/api';
 import { Header } from './components/Header';
 import { BakeryHero } from './components/BakeryHero';
 import { CategoryNav } from './components/CategoryNav';
@@ -10,12 +10,17 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { PolicyModal } from './components/PolicyModal';
 import { FloatingCartButton } from './components/FloatingCartButton';
-import { Loader2, AlertTriangle, RefreshCw, Cake, Heart, Sparkles, MessageCircle, Mail, Shield, FileText, RotateCcw, Truck } from 'lucide-react';
+import { Loader2, AlertTriangle, RefreshCw, Cake, Heart, Sparkles, MessageCircle, Mail, Shield, FileText, RotateCcw, Truck, AlertCircle } from 'lucide-react';
 
 export default function App() {
   const [categories, setCategories] = useState<Record<string, Product[]>>({});
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+
+  // Live updates & polling state
+  const [appVersion, setAppVersion] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState<string | null>(null);
+  const [shutdown, setShutdown] = useState<ShutdownStatus | null>(null);
 
   const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -32,10 +37,28 @@ export default function App() {
 
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
+  const [isPaymentProcessing, setIsPaymentProcessing] = useState<boolean>(false);
   const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmationDetails | null>(null);
   const [activePolicy, setActivePolicy] = useState<PolicyType | null>(null);
 
   const menuSectionRef = useRef<HTMLDivElement>(null);
+
+  // Synchronized refs to avoid stale closures in polling interval
+  const versionRef = useRef<string | null>(null);
+  const isCheckoutOpenRef = useRef<boolean>(false);
+  const isPaymentProcessingRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    isCheckoutOpenRef.current = isCheckoutOpen;
+  }, [isCheckoutOpen]);
+
+  useEffect(() => {
+    isPaymentProcessingRef.current = isPaymentProcessing;
+  }, [isPaymentProcessing]);
+
+  useEffect(() => {
+    versionRef.current = appVersion;
+  }, [appVersion]);
 
   // Sync cart to localStorage
   useEffect(() => {
@@ -46,6 +69,29 @@ export default function App() {
     }
   }, [cart]);
 
+  // Silent refetch to update UI in-place without page reload or disruption
+  const silentRefetch = async (newVer?: string | null) => {
+    try {
+      const res = await fetchBakeryProducts();
+      if (res && res.categories && Object.keys(res.categories).length > 0) {
+        setCategories(res.categories);
+        if (res.announcement !== undefined) {
+          setAnnouncement(res.announcement);
+        }
+        if (res.shutdown !== undefined) {
+          setShutdown(res.shutdown);
+        }
+        const updatedVer = newVer || (res.version !== undefined ? String(res.version) : null);
+        if (updatedVer !== null) {
+          versionRef.current = updatedVer;
+          setAppVersion(updatedVer);
+        }
+      }
+    } catch (err) {
+      console.warn('Silent live refresh failed:', err);
+    }
+  };
+
   // Initial Fetch on page load
   const loadProducts = async () => {
     setIsLoading(true);
@@ -54,6 +100,18 @@ export default function App() {
       const res = await fetchBakeryProducts();
       if (res && res.categories && Object.keys(res.categories).length > 0) {
         setCategories(res.categories);
+        if (res.announcement !== undefined) {
+          setAnnouncement(res.announcement);
+        }
+        if (res.shutdown !== undefined) {
+          setShutdown(res.shutdown);
+        }
+        // Baseline version stored on first load
+        if (res.version !== undefined && res.version !== null) {
+          const v = String(res.version);
+          versionRef.current = v;
+          setAppVersion(v);
+        }
       } else {
         throw new Error('No bakery categories received.');
       }
@@ -67,6 +125,36 @@ export default function App() {
 
   useEffect(() => {
     loadProducts();
+  }, []);
+
+  // Requirement 3: Automatic live data refresh every 8 seconds (paused during checkout/payment)
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      // Pause polling entirely once customer opens checkout or Razorpay popup
+      if (isCheckoutOpenRef.current || isPaymentProcessingRef.current) {
+        return;
+      }
+
+      try {
+        const latestVersion = await fetchApiVersion();
+        if (latestVersion === null) return;
+
+        // Double check pause state before executing update
+        if (isCheckoutOpenRef.current || isPaymentProcessingRef.current) {
+          return;
+        }
+
+        const currentKnown = versionRef.current;
+        if (currentKnown !== null && String(latestVersion) !== String(currentKnown)) {
+          console.log(`Live data version changed from ${currentKnown} to ${latestVersion}. Silently refetching data...`);
+          await silentRefetch(String(latestVersion));
+        }
+      } catch (err) {
+        console.warn('Live version check error:', err);
+      }
+    }, 8000);
+
+    return () => clearInterval(interval);
   }, []);
 
   // Cart actions
@@ -160,6 +248,7 @@ export default function App() {
     setConfirmedOrder(orderDetails);
     setCart([]);
     setIsCheckoutOpen(false);
+    setIsPaymentProcessing(false);
     setIsCartOpen(false);
   };
 
@@ -167,6 +256,7 @@ export default function App() {
     setConfirmedOrder(orderDetails);
     setCart([]);
     setIsCheckoutOpen(false);
+    setIsPaymentProcessing(false);
     setIsCartOpen(false);
   };
 
@@ -183,7 +273,16 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        announcement={announcement}
       />
+
+      {/* Temporary Kitchen Shutdown Banner (if active in API) */}
+      {shutdown?.active && (
+        <div className="bg-[#7F1D1D] text-white px-4 py-2.5 text-xs text-center font-medium flex items-center justify-center gap-2 border-b border-red-900 shadow-inner">
+          <AlertCircle className="w-4 h-4 text-amber-300 shrink-0" />
+          <span>{shutdown.message || 'The bakery kitchen is temporarily closed for new orders today. Please check back soon!'}</span>
+        </div>
+      )}
 
       {/* Hero Showcase */}
       <BakeryHero onExploreClick={scrollToMenu} />
@@ -332,11 +431,15 @@ export default function App() {
       {/* Checkout Form Modal - Razorpay with WhatsApp Fallback */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
-        onClose={() => setIsCheckoutOpen(false)}
+        onClose={() => {
+          setIsCheckoutOpen(false);
+          setIsPaymentProcessing(false);
+        }}
         items={cart}
         totalAmount={cartTotalAmount}
         onPaymentSuccess={handlePaymentSuccess}
         onWhatsAppOrder={handleWhatsAppOrder}
+        onPaymentStateChange={setIsPaymentProcessing}
       />
 
       {/* Order Confirmation Screen Modal */}

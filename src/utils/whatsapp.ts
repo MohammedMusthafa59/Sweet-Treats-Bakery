@@ -4,9 +4,11 @@ export const WHATSAPP_PHONE_NUMBER = '919486123975';
 
 export function buildWhatsAppMessage(
   customerName: string,
-  customerContact: string,
+  phone: string,
   items: CartItem[],
-  total: number
+  total: number,
+  address?: string,
+  email?: string
 ): string {
   const itemLines = items
     .map(
@@ -16,8 +18,14 @@ export function buildWhatsAppMessage(
     .join('\n');
 
   let message = `Hi! I'd like to order:\n${itemLines}\nTotal: ₹${total}\nName: ${customerName}`;
-  if (customerContact && customerContact.trim()) {
-    message += `\nPhone/Email: ${customerContact.trim()}`;
+  if (phone && phone.trim()) {
+    message += `\nPhone: ${phone.trim()}`;
+  }
+  if (email && email.trim()) {
+    message += `\nEmail: ${email.trim()}`;
+  }
+  if (address && address.trim()) {
+    message += `\nDelivery Address: ${address.trim()}`;
   }
   return message;
 }

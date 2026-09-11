@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CartItem, CustomerInfo, OrderConfirmationDetails } from '../types';
+import { CartItem, OrderConfirmationDetails } from '../types';
 import { loadRazorpayScript, RAZORPAY_KEY_ID, RazorpayPaymentSuccessResponse } from '../utils/razorpay';
 import { submitBakeryOrder } from '../utils/api';
 import { buildWhatsAppMessage, buildWhatsAppUrl, WHATSAPP_PHONE_NUMBER } from '../utils/whatsapp';
@@ -13,10 +13,10 @@ import {
   User,
   Mail,
   Phone,
+  MapPin,
   ShieldCheck,
   Loader2,
   AlertTriangle,
-  RotateCcw,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -27,6 +27,7 @@ interface CheckoutModalProps {
   totalAmount: number;
   onPaymentSuccess: (details: OrderConfirmationDetails) => void;
   onWhatsAppOrder: (details: OrderConfirmationDetails) => void;
+  onPaymentStateChange?: (isProcessing: boolean) => void;
 }
 
 export const CheckoutModal: React.FC<CheckoutModalProps> = ({
@@ -36,12 +37,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   totalAmount,
   onPaymentSuccess,
   onWhatsAppOrder,
+  onPaymentStateChange,
 }) => {
   const [customerName, setCustomerName] = useState('');
-  const [customerEmail, setCustomerEmail] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState('');
+  const [address, setAddress] = useState('');
 
-  const [errors, setErrors] = useState<{ name?: string; email?: string; phone?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; phone?: string; email?: string; address?: string }>({});
   const [isProcessingRazorpay, setIsProcessingRazorpay] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<string | null>(null);
   const [verificationError, setVerificationError] = useState<string | null>(null);
@@ -49,23 +52,32 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
   const totalItemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
+  const updateProcessingState = (processing: boolean) => {
+    setIsProcessingRazorpay(processing);
+    onPaymentStateChange?.(processing);
+  };
+
   const validate = (): boolean => {
-    const newErrors: { name?: string; email?: string; phone?: string } = {};
+    const newErrors: { name?: string; phone?: string; email?: string; address?: string } = {};
 
     if (!customerName.trim()) {
       newErrors.name = 'Please enter your full name.';
     }
 
-    if (!customerEmail.trim()) {
-      newErrors.email = 'Please enter your email address.';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
-      newErrors.email = 'Please enter a valid email address.';
+    if (!phone.trim()) {
+      newErrors.phone = 'Please enter your phone number.';
+    } else if (phone.trim().replace(/\D/g, '').length < 8) {
+      newErrors.phone = 'Please enter a valid phone number (at least 8 digits).';
     }
 
-    if (!customerPhone.trim()) {
-      newErrors.phone = 'Please enter your contact phone number.';
-    } else if (customerPhone.trim().length < 8) {
-      newErrors.phone = 'Please enter a valid phone number (at least 8 digits).';
+    if (email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      newErrors.email = 'Please enter a valid email address or leave blank.';
+    }
+
+    if (!address.trim()) {
+      newErrors.address = 'Please enter your delivery address.';
+    } else if (address.trim().length < 5) {
+      newErrors.address = 'Please provide a complete delivery address (street, building, landmark).';
     }
 
     setErrors(newErrors);
@@ -80,43 +92,45 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     if (!validate()) return;
 
-    setIsProcessingRazorpay(true);
+    updateProcessingState(true);
 
     try {
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded || !window.Razorpay) {
         setPaymentNotice('Unable to load Razorpay payment gateway. You can try again or order via WhatsApp instead.');
-        setIsProcessingRazorpay(false);
+        updateProcessingState(false);
         return;
       }
 
       const options = {
         key: RAZORPAY_KEY_ID,
-        amount: Math.round(totalAmount * 100), // in paise
+        amount: Math.round(totalAmount * 100), // cart total in paise (cart total * 100)
         currency: 'INR',
         name: 'Choco House',
         description: `${totalItemCount} bakery item${totalItemCount === 1 ? '' : 's'} • Total ₹${totalAmount}`,
         prefill: {
           name: customerName.trim(),
-          email: customerEmail.trim(),
-          contact: customerPhone.trim(),
+          contact: phone.trim(),
+          ...(email.trim() ? { email: email.trim() } : {}),
         },
         theme: {
           color: '#B45309',
         },
         modal: {
           ondismiss: () => {
-            setIsProcessingRazorpay(false);
+            updateProcessingState(false);
             setPaymentNotice('Payment was not completed — you can try again or order via WhatsApp instead.');
           },
         },
         handler: async (response: RazorpayPaymentSuccessResponse) => {
-          setIsProcessingRazorpay(true);
+          updateProcessingState(true);
           try {
             // Send payload to Google Apps Script as specified in prompt
             const orderPayload = {
               customerName: customerName.trim(),
-              customerEmail: customerEmail.trim(),
+              phone: phone.trim(),
+              email: email.trim() || '',
+              address: address.trim(),
               items: items.map((item) => ({
                 name: item.product.name,
                 qty: item.quantity,
@@ -133,17 +147,19 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
             if (postResult.success === false) {
               setFailedPaymentId(response.razorpay_payment_id);
               setVerificationError(
-                postResult.message || 'Signature verification failed. Please contact our support via WhatsApp so we can confirm and process your order immediately.'
+                postResult.message ||
+                  'Signature verification failed. Please contact our support via WhatsApp so we can confirm and process your order immediately.'
               );
-              setIsProcessingRazorpay(false);
+              updateProcessingState(false);
               return;
             }
 
             // Success! Clear cart and display confirmation modal
             const confirmationDetails: OrderConfirmationDetails = {
               customerName: customerName.trim(),
-              customerEmail: customerEmail.trim(),
-              customerPhone: customerPhone.trim(),
+              phone: phone.trim(),
+              email: email.trim() || undefined,
+              address: address.trim(),
               items: orderPayload.items,
               total: totalAmount,
               paymentId: response.razorpay_payment_id,
@@ -152,15 +168,16 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
 
-            setIsProcessingRazorpay(false);
+            updateProcessingState(false);
             onPaymentSuccess(confirmationDetails);
           } catch (err: any) {
             console.error('Error recording payment:', err);
-            // Fallback: still confirm since payment ID is already generated
+            // Fallback: still confirm since payment ID was captured
             const confirmationDetails: OrderConfirmationDetails = {
               customerName: customerName.trim(),
-              customerEmail: customerEmail.trim(),
-              customerPhone: customerPhone.trim(),
+              phone: phone.trim(),
+              email: email.trim() || undefined,
+              address: address.trim(),
               items: items.map((i) => ({ name: i.product.name, qty: i.quantity, price: i.product.price })),
               total: totalAmount,
               paymentId: response.razorpay_payment_id,
@@ -168,7 +185,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               channel: 'Razorpay',
               createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
-            setIsProcessingRazorpay(false);
+            updateProcessingState(false);
             onPaymentSuccess(confirmationDetails);
           }
         },
@@ -178,24 +195,36 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
       rzpInstance.on('payment.failed', (response: any) => {
         console.warn('Razorpay payment failed:', response);
-        setIsProcessingRazorpay(false);
+        updateProcessingState(false);
         setPaymentNotice('Payment was not completed — you can try again or order via WhatsApp instead.');
       });
 
       rzpInstance.open();
     } catch (err) {
       console.error('Razorpay initialization error:', err);
-      setIsProcessingRazorpay(false);
+      updateProcessingState(false);
       setPaymentNotice('Payment was not completed — you can try again or order via WhatsApp instead.');
     }
   };
 
   const handleOrderViaWhatsAppFallback = () => {
-    // Collect Name and Phone/Email
     const trimmedName = customerName.trim() || 'Valued Customer';
-    const contactInfo = [customerPhone.trim(), customerEmail.trim()].filter(Boolean).join(' / ');
+    const trimmedPhone = phone.trim();
+    const trimmedAddress = address.trim();
+    const trimmedEmail = email.trim();
 
-    const formattedMessage = buildWhatsAppMessage(trimmedName, contactInfo, items, totalAmount);
+    if (!trimmedName || !trimmedPhone || !trimmedAddress) {
+      if (!validate()) return;
+    }
+
+    const formattedMessage = buildWhatsAppMessage(
+      trimmedName,
+      trimmedPhone,
+      items,
+      totalAmount,
+      trimmedAddress,
+      trimmedEmail
+    );
     const whatsAppUrl = buildWhatsAppUrl(formattedMessage);
 
     // Open WhatsApp
@@ -204,8 +233,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     // Record order and confirm
     const confirmationDetails: OrderConfirmationDetails = {
       customerName: trimmedName,
-      customerEmail: customerEmail.trim(),
-      customerPhone: customerPhone.trim(),
+      phone: trimmedPhone,
+      email: trimmedEmail || undefined,
+      address: trimmedAddress,
       items: items.map((item) => ({
         name: item.product.name,
         qty: item.quantity,
@@ -219,12 +249,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
     submitBakeryOrder({
       customerName: trimmedName,
-      customerEmail: customerEmail.trim(),
-      customerPhone: customerPhone.trim(),
+      phone: trimmedPhone,
+      email: trimmedEmail || '',
+      address: trimmedAddress,
       items: confirmationDetails.items,
       total: totalAmount,
-      channel: 'WhatsApp',
-      timestamp: new Date().toISOString(),
+      order_id: '',
+      payment_id: 'WHATSAPP_HANDOFF',
+      signature: '',
     });
 
     onWhatsAppOrder(confirmationDetails);
@@ -258,7 +290,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 </div>
                 <div>
                   <h3 className="font-display text-lg sm:text-xl font-bold text-[#2E190F]">
-                    Complete Your Order
+                    Checkout &amp; Payment
                   </h3>
                   <p className="text-xs text-[#7A5B4C]">
                     Pay securely via Razorpay (UPI, Cards, Netbanking)
@@ -277,7 +309,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               </button>
             </div>
 
-            {/* Verification Failure Banner */}
+            {/* Signature Verification Failure Banner */}
             {verificationError && (
               <div className="mx-5 mt-4 p-4 bg-red-50 border border-red-200 rounded-xl text-xs space-y-2 text-red-900">
                 <div className="flex items-center gap-2 font-bold text-red-800">
@@ -383,44 +415,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 )}
               </div>
 
-              {/* Customer Email & Phone Fields */}
+              {/* Phone & Email Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Email Input */}
-                <div>
-                  <label
-                    htmlFor="checkout-email-input"
-                    className="block text-xs font-semibold text-[#3B2215] mb-1.5"
-                  >
-                    Email Address <span className="text-[#DC2626]">*</span>
-                  </label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-[#9C7A68] absolute left-3 top-1/2 -translate-y-1/2" />
-                    <input
-                      id="checkout-email-input"
-                      type="email"
-                      placeholder="name@example.com"
-                      value={customerEmail}
-                      disabled={isProcessingRazorpay}
-                      onChange={(e) => {
-                        setCustomerEmail(e.target.value);
-                        if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
-                      }}
-                      className={`w-full pl-9 pr-3 py-2.5 text-sm bg-white rounded-xl border transition-all text-[#2E190F] focus:outline-none focus:ring-2 ${
-                        errors.email
-                          ? 'border-[#DC2626] focus:ring-[#DC2626]/30'
-                          : 'border-[#E2D4C3] focus:border-[#B45309] focus:ring-[#B45309]/30'
-                      }`}
-                    />
-                  </div>
-                  {errors.email && (
-                    <p className="mt-1 text-xs text-[#DC2626] flex items-center gap-1">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      {errors.email}
-                    </p>
-                  )}
-                </div>
-
-                {/* Phone Input */}
+                {/* Phone Input (Required) */}
                 <div>
                   <label
                     htmlFor="checkout-phone-input"
@@ -434,10 +431,10 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                       id="checkout-phone-input"
                       type="tel"
                       placeholder="e.g. 9876543210"
-                      value={customerPhone}
+                      value={phone}
                       disabled={isProcessingRazorpay}
                       onChange={(e) => {
-                        setCustomerPhone(e.target.value);
+                        setPhone(e.target.value);
                         if (errors.phone) setErrors((prev) => ({ ...prev, phone: undefined }));
                       }}
                       className={`w-full pl-9 pr-3 py-2.5 text-sm bg-white rounded-xl border transition-all text-[#2E190F] focus:outline-none focus:ring-2 ${
@@ -454,6 +451,76 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                     </p>
                   )}
                 </div>
+
+                {/* Email Input (Optional) */}
+                <div>
+                  <label
+                    htmlFor="checkout-email-input"
+                    className="block text-xs font-semibold text-[#3B2215] mb-1.5"
+                  >
+                    Email <span className="text-[#8C6F5E] font-normal text-[11px]">(optional)</span>
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-[#9C7A68] absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      id="checkout-email-input"
+                      type="email"
+                      placeholder="name@example.com"
+                      value={email}
+                      disabled={isProcessingRazorpay}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (errors.email) setErrors((prev) => ({ ...prev, email: undefined }));
+                      }}
+                      className={`w-full pl-9 pr-3 py-2.5 text-sm bg-white rounded-xl border transition-all text-[#2E190F] focus:outline-none focus:ring-2 ${
+                        errors.email
+                          ? 'border-[#DC2626] focus:ring-[#DC2626]/30'
+                          : 'border-[#E2D4C3] focus:border-[#B45309] focus:ring-[#B45309]/30'
+                      }`}
+                    />
+                  </div>
+                  {errors.email && (
+                    <p className="mt-1 text-xs text-[#DC2626] flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      {errors.email}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Delivery Address Textarea (Required) */}
+              <div>
+                <label
+                  htmlFor="checkout-address-input"
+                  className="block text-xs font-semibold text-[#3B2215] mb-1.5"
+                >
+                  Delivery Address <span className="text-[#DC2626]">*</span>
+                </label>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 text-[#9C7A68] absolute left-3 top-3" />
+                  <textarea
+                    id="checkout-address-input"
+                    rows={3}
+                    placeholder="Flat/House No., Building, Street, Area, Landmark, Pincode"
+                    value={address}
+                    disabled={isProcessingRazorpay}
+                    onChange={(e) => {
+                      setAddress(e.target.value);
+                      if (errors.address) setErrors((prev) => ({ ...prev, address: undefined }));
+                    }}
+                    className={`w-full pl-9 pr-3.5 py-2.5 text-sm bg-white rounded-xl border transition-all text-[#2E190F] focus:outline-none focus:ring-2 resize-none ${
+                      errors.address
+                        ? 'border-[#DC2626] focus:ring-[#DC2626]/30'
+                        : 'border-[#E2D4C3] focus:border-[#B45309] focus:ring-[#B45309]/30'
+                    }`}
+                  />
+                </div>
+                {errors.address && (
+                  <p className="mt-1 text-xs text-[#DC2626] flex items-center gap-1">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    {errors.address}
+                  </p>
+                )}
               </div>
 
               {/* Primary: Razorpay Pay Now Button */}
@@ -480,7 +547,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
                 <div className="flex items-center justify-center gap-2 text-[11px] text-[#7C5A47]">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Secured by Razorpay • UPI, Cards, Netbanking & Wallets</span>
+                  <span>Secured by Razorpay • UPI, Cards, Netbanking &amp; Wallets</span>
                 </div>
               </div>
 
@@ -506,7 +573,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                   <span>Order via WhatsApp instead</span>
                 </button>
                 <p className="text-[10px] text-center text-[#9C7F6E] mt-1.5">
-                  Sends pre-formatted cart summary to kitchen at +91 9486123975
+                  Sends pre-formatted cart summary &amp; address to kitchen at +91 9486123975
                 </p>
               </div>
             </form>

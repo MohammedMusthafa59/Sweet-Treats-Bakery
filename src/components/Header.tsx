@@ -7,6 +7,7 @@ interface HeaderProps {
   onOpenCart: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
+  announcement?: string | null;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -15,15 +16,15 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenCart,
   searchQuery,
   onSearchChange,
+  announcement,
 }) => {
   return (
     <header className="sticky top-0 z-30 bg-[#FAF7F2]/95 backdrop-blur-md border-b border-[#EADFCF] transition-all">
-      {/* Top Announcement Ribbon */}
+      {/* Top Announcement Ribbon - plain text only, no icon prefix */}
       <div className="bg-[#5B2E1E] text-[#F9EFE6] text-xs font-medium py-1.5 px-4">
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-3.5 h-3.5 text-[#F59E0B]" />
-            <span>Freshly baked every morning with 100% pure butter & organic extracts</span>
+          <div className="flex items-center">
+            <span>{announcement || 'Freshly baked every morning with 100% pure butter & organic extracts'}</span>
           </div>
           <div className="hidden sm:flex items-center gap-4 text-[11px] text-[#D8B49C]">
             <span className="flex items-center gap-1">

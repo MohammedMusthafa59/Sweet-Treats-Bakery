@@ -5,15 +5,14 @@ import {
   CheckCircle2,
   ShoppingBag,
   MessageCircle,
-  ExternalLink,
   Sparkles,
   Clock,
   User,
+  Phone,
   Mail,
-  Receipt,
+  MapPin,
   Check,
   CreditCard,
-  ShieldCheck,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WHATSAPP_PHONE_NUMBER } from '../utils/whatsapp';
@@ -103,27 +102,51 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
           {/* Details Body */}
           <div className="p-5 sm:p-6 space-y-4 text-xs">
             {/* Meta Info Grid */}
-            <div className="grid grid-cols-2 gap-3 bg-white p-3.5 rounded-2xl border border-[#ECE0D2]">
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-[#8C6F5E] flex items-center gap-1">
-                  <User className="w-3 h-3 text-[#B45309]" /> Customer
-                </span>
-                <span className="font-bold text-[#2E190F] block truncate text-xs sm:text-sm">
-                  {order.customerName}
-                </span>
+            <div className="bg-white p-3.5 rounded-2xl border border-[#ECE0D2] space-y-2.5">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-[#8C6F5E] flex items-center gap-1">
+                    <User className="w-3 h-3 text-[#B45309]" /> Customer
+                  </span>
+                  <span className="font-bold text-[#2E190F] block truncate text-xs sm:text-sm">
+                    {order.customerName}
+                  </span>
+                </div>
+
+                <div className="space-y-0.5">
+                  <span className="text-[11px] text-[#8C6F5E] flex items-center gap-1">
+                    <Phone className="w-3 h-3 text-[#B45309]" /> Phone
+                  </span>
+                  <span className="font-semibold text-[#2E190F] block truncate text-xs">
+                    {order.phone || 'Recorded'}
+                  </span>
+                </div>
               </div>
 
-              <div className="space-y-0.5">
-                <span className="text-[11px] text-[#8C6F5E] flex items-center gap-1">
-                  <Mail className="w-3 h-3 text-[#B45309]" /> Contact
-                </span>
-                <span className="font-semibold text-[#2E190F] block truncate text-xs">
-                  {order.customerEmail || order.customerPhone || 'Recorded'}
-                </span>
-              </div>
+              {order.email && (
+                <div className="space-y-0.5 pt-1.5 border-t border-[#F5ECE2]">
+                  <span className="text-[11px] text-[#8C6F5E] flex items-center gap-1">
+                    <Mail className="w-3 h-3 text-[#B45309]" /> Email
+                  </span>
+                  <span className="text-[#2E190F] text-xs font-medium">
+                    {order.email}
+                  </span>
+                </div>
+              )}
+
+              {order.address && (
+                <div className="space-y-0.5 pt-1.5 border-t border-[#F5ECE2]">
+                  <span className="text-[11px] text-[#8C6F5E] flex items-center gap-1">
+                    <MapPin className="w-3 h-3 text-[#B45309]" /> Delivery Address
+                  </span>
+                  <span className="text-[#2E190F] text-xs leading-relaxed block">
+                    {order.address}
+                  </span>
+                </div>
+              )}
 
               {isRazorpay && order.paymentId && (
-                <div className="col-span-2 pt-2 border-t border-[#F2EAE0] flex items-center justify-between">
+                <div className="pt-2 border-t border-[#F2EAE0] flex items-center justify-between">
                   <div className="space-y-0.5">
                     <span className="text-[10px] text-[#8C6F5E] uppercase tracking-wider flex items-center gap-1">
                       <CreditCard className="w-3 h-3 text-emerald-600" /> Razorpay Payment ID

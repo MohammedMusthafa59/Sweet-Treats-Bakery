@@ -16,14 +16,17 @@ export interface CartItem {
 
 export interface CustomerInfo {
   customerName: string;
-  customerEmail: string;
-  customerPhone?: string;
+  phone: string;
+  email?: string;
+  address: string;
   orderNotes?: string;
 }
 
 export interface RazorpayOrderPayload {
   customerName: string;
-  customerEmail: string;
+  phone: string;
+  email: string;
+  address: string;
   items: Array<{
     name: string;
     qty: number;
@@ -37,8 +40,9 @@ export interface RazorpayOrderPayload {
 
 export interface OrderConfirmationDetails {
   customerName: string;
-  customerEmail: string;
-  customerPhone?: string;
+  phone: string;
+  email?: string;
+  address: string;
   items: Array<{
     name: string;
     qty: number;
@@ -59,8 +63,16 @@ export type PolicyType =
   | 'shipping'
   | 'contact';
 
+export interface ShutdownStatus {
+  active: boolean;
+  message?: string;
+}
+
 export interface ApiProductResponse {
   success: boolean;
   categories?: Record<string, Product[]>;
+  shutdown?: ShutdownStatus | null;
+  announcement?: string | null;
+  version?: string | number;
   message?: string;
 }

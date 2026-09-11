@@ -3,6 +3,9 @@ import { ApiProductResponse } from '../types';
 export const GOOGLE_SCRIPT_API_URL =
   'https://script.google.com/macros/s/AKfycbwPFgnfouW9nIs31hIvSSZ_tgQCySy9SCwmDXTdvqBQLyGR6qG7UpmCoBX4_OzGZWOO/exec';
 
+export const GOOGLE_SCRIPT_VERSION_URL =
+  'https://script.google.com/macros/s/AKfycbwPFgnfouW9nIs31hIvSSZ_tgQCySy9SCwmDXTdvqBQLyGR6qG7UpmCoBX4_OzGZWOO/exec?action=version';
+
 // Backup product data in case the Google Apps Script URL experiences temporary quotas or network hiccups
 export const BACKUP_PRODUCTS_DATA: ApiProductResponse = {
   success: true,
@@ -146,6 +149,34 @@ export async function fetchBakeryProducts(): Promise<ApiProductResponse> {
   } catch (error) {
     console.warn('Live API fetch warning (using backup catalog):', error);
     return BACKUP_PRODUCTS_DATA;
+  }
+}
+
+export async function fetchApiVersion(): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const response = await fetch(GOOGLE_SCRIPT_VERSION_URL, {
+      method: 'GET',
+      headers: {
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (data && data.version !== undefined && data.version !== null) {
+      return String(data.version);
+    }
+    return null;
+  } catch (error) {
+    return null;
   }
 }
 
