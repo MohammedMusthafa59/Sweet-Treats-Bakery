@@ -68,11 +68,18 @@ export interface ShutdownStatus {
   message?: string;
 }
 
+export interface AnnouncementData {
+  message: string;
+  ctaLabel?: string;
+  scope?: 'All' | 'Specific' | string;
+  itemNames?: string[];
+}
+
 export interface ApiProductResponse {
   success: boolean;
   categories?: Record<string, Product[]>;
   shutdown?: ShutdownStatus | null;
-  announcement?: string | null;
+  announcement?: AnnouncementData | string | null;
   version?: string | number;
   message?: string;
 }

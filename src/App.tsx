@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Product, CartItem, OrderConfirmationDetails, PolicyType, ShutdownStatus } from './types';
+import { Product, CartItem, OrderConfirmationDetails, PolicyType, ShutdownStatus, AnnouncementData } from './types';
 import { fetchBakeryProducts, fetchApiVersion } from './utils/api';
 import { Header } from './components/Header';
 import { BakeryHero } from './components/BakeryHero';
@@ -10,7 +10,36 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { PolicyModal } from './components/PolicyModal';
 import { FloatingCartButton } from './components/FloatingCartButton';
-import { Loader2, AlertTriangle, RefreshCw, Cake, Heart, Sparkles, MessageCircle, Mail, Shield, FileText, RotateCcw, Truck, AlertCircle } from 'lucide-react';
+import { ShutdownOverlay } from './components/ShutdownOverlay';
+import { AnnouncementModal } from './components/AnnouncementModal';
+import { DynamicAnnouncementBanner } from './components/DynamicAnnouncementBanner';
+import { Loader2, AlertTriangle, RefreshCw, Cake, Heart, Sparkles, MessageCircle, Mail, Shield, FileText, RotateCcw, Truck } from 'lucide-react';
+
+function normalizeAnnouncement(ann: unknown): AnnouncementData | null {
+  if (!ann) return null;
+  if (typeof ann === 'string') {
+    const trimmed = ann.trim();
+    if (!trimmed) return null;
+    return {
+      message: trimmed,
+      ctaLabel: 'Explore Treats',
+      scope: 'All',
+      itemNames: [],
+    };
+  }
+  if (typeof ann === 'object') {
+    const obj = ann as Record<string, unknown>;
+    const message = typeof obj.message === 'string' ? obj.message.trim() : '';
+    if (!message) return null;
+    const ctaLabel = typeof obj.ctaLabel === 'string' && obj.ctaLabel.trim() ? obj.ctaLabel.trim() : 'Explore Treats';
+    const scope = typeof obj.scope === 'string' && obj.scope.trim() ? obj.scope.trim() : 'All';
+    const itemNames = Array.isArray(obj.itemNames)
+      ? obj.itemNames.map((n) => String(n).trim()).filter(Boolean)
+      : [];
+    return { message, ctaLabel, scope, itemNames };
+  }
+  return null;
+}
 
 export default function App() {
   const [categories, setCategories] = useState<Record<string, Product[]>>({});
@@ -19,7 +48,10 @@ export default function App() {
 
   // Live updates & polling state
   const [appVersion, setAppVersion] = useState<string | null>(null);
-  const [announcement, setAnnouncement] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState<AnnouncementData | null>(null);
+  const [isAnnouncementPopupOpen, setIsAnnouncementPopupOpen] = useState<boolean>(false);
+  const [isPersistentBannerVisible, setIsPersistentBannerVisible] = useState<boolean>(false);
+  const [highlightedProductName, setHighlightedProductName] = useState<string | null>(null);
   const [shutdown, setShutdown] = useState<ShutdownStatus | null>(null);
 
   const [activeCategory, setActiveCategory] = useState<string>('All');
@@ -73,10 +105,13 @@ export default function App() {
   const silentRefetch = async (newVer?: string | null) => {
     try {
       const res = await fetchBakeryProducts();
-      if (res && res.categories && Object.keys(res.categories).length > 0) {
-        setCategories(res.categories);
+      if (res) {
+        if (res.categories && Object.keys(res.categories).length > 0) {
+          setCategories(res.categories);
+        }
         if (res.announcement !== undefined) {
-          setAnnouncement(res.announcement);
+          const normAnn = normalizeAnnouncement(res.announcement);
+          setAnnouncement(normAnn);
         }
         if (res.shutdown !== undefined) {
           setShutdown(res.shutdown);
@@ -101,7 +136,12 @@ export default function App() {
       if (res && res.categories && Object.keys(res.categories).length > 0) {
         setCategories(res.categories);
         if (res.announcement !== undefined) {
-          setAnnouncement(res.announcement);
+          const normAnn = normalizeAnnouncement(res.announcement);
+          setAnnouncement(normAnn);
+          if (normAnn !== null) {
+            setIsAnnouncementPopupOpen(true);
+            setIsPersistentBannerVisible(false);
+          }
         }
         if (res.shutdown !== undefined) {
           setShutdown(res.shutdown);
@@ -264,8 +304,91 @@ export default function App() {
     menuSectionRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleAnnouncementAction = () => {
+    setIsAnnouncementPopupOpen(false);
+    setIsPersistentBannerVisible(true);
+
+    if (!announcement) {
+      scrollToMenu();
+      return;
+    }
+
+    const scope = (announcement.scope || 'All').trim().toLowerCase();
+    const itemNames = announcement.itemNames || [];
+
+    if (scope === 'specific' && itemNames.length > 0) {
+      const targetName = itemNames[0].trim();
+      const targetLower = targetName.toLowerCase();
+
+      // Reset filters so that all products are rendered in the DOM
+      setActiveCategory('All');
+      setSearchQuery('');
+      setHighlightedProductName(targetName);
+
+      setTimeout(() => {
+        const safeId = `product-${targetName.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+        let elem = document.getElementById(safeId);
+
+        if (!elem) {
+          try {
+            elem = document.querySelector(`[data-product-name="${CSS.escape(targetName)}"]`) as HTMLElement;
+          } catch {
+            elem = null;
+          }
+        }
+
+        if (!elem) {
+          const allCards = document.querySelectorAll('[data-product-name]');
+          for (const card of allCards) {
+            const attr = card.getAttribute('data-product-name')?.toLowerCase() || '';
+            if (attr === targetLower || attr.includes(targetLower) || targetLower.includes(attr)) {
+              elem = card as HTMLElement;
+              break;
+            }
+          }
+        }
+
+        if (elem) {
+          elem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          scrollToMenu();
+        }
+
+        setTimeout(() => {
+          setHighlightedProductName(null);
+        }, 4500);
+      }, 150);
+    } else {
+      scrollToMenu();
+    }
+  };
+
+  const handleCloseAnnouncementPopup = () => {
+    setIsAnnouncementPopupOpen(false);
+    setIsPersistentBannerVisible(true);
+  };
+
+  // Requirement 7: SITE SHUTDOWN POPUP
+  // When shutdown.active is true, immediately show a full-screen, non-closeable overlay/popup
+  // covering the entire page (no X button, no click-outside-to-dismiss, no ESC key dismissal).
+  // Display the message from shutdown.message.
+  // Do not render the product listing, cart, or any other page content behind it while shutdown is active.
+  // The polling interval continues ticking in the background, so if shutdown.active becomes false,
+  // the overlay is automatically dismissed and the site loads normally without a reload.
+  if (shutdown?.active) {
+    return <ShutdownOverlay message={shutdown.message} />;
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-[#2C1810] flex flex-col selection:bg-[#E8D5C4] selection:text-[#3B1E12]">
+      {/* Requirement 8: Dynamic Announcement Sticky Banner (only when announcement is active and popup closed) */}
+      {announcement && isPersistentBannerVisible && (
+        <DynamicAnnouncementBanner
+          announcement={announcement}
+          onClick={handleAnnouncementAction}
+        />
+      )}
+
       {/* Navigation Header */}
       <Header
         cartItemCount={totalItemCount}
@@ -273,16 +396,7 @@ export default function App() {
         onOpenCart={() => setIsCartOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        announcement={announcement}
       />
-
-      {/* Temporary Kitchen Shutdown Banner (if active in API) */}
-      {shutdown?.active && (
-        <div className="bg-[#7F1D1D] text-white px-4 py-2.5 text-xs text-center font-medium flex items-center justify-center gap-2 border-b border-red-900 shadow-inner">
-          <AlertCircle className="w-4 h-4 text-amber-300 shrink-0" />
-          <span>{shutdown.message || 'The bakery kitchen is temporarily closed for new orders today. Please check back soon!'}</span>
-        </div>
-      )}
 
       {/* Hero Showcase */}
       <BakeryHero onExploreClick={scrollToMenu} />
@@ -397,6 +511,12 @@ export default function App() {
                         product={product}
                         category={categoryName}
                         onAddToCart={handleAddToCart}
+                        isHighlighted={
+                          highlightedProductName !== null &&
+                          (product.name.toLowerCase() === highlightedProductName.toLowerCase() ||
+                            product.name.toLowerCase().includes(highlightedProductName.toLowerCase()) ||
+                            highlightedProductName.toLowerCase().includes(product.name.toLowerCase()))
+                        }
                       />
                     ))}
                   </div>
@@ -454,6 +574,14 @@ export default function App() {
         selectedPolicy={activePolicy}
         onClose={() => setActivePolicy(null)}
         onSelectPolicy={(p) => setActivePolicy(p)}
+      />
+
+      {/* Requirement 8: Announcement Modal Popup (reappears on every page load/visit) */}
+      <AnnouncementModal
+        isOpen={isAnnouncementPopupOpen}
+        announcement={announcement}
+        onClose={handleCloseAnnouncementPopup}
+        onCtaClick={handleAnnouncementAction}
       />
 
       {/* Footer */}

@@ -7,12 +7,14 @@ interface ProductCardProps {
   product: Product;
   category: string;
   onAddToCart: (product: Product, quantity: number) => void;
+  isHighlighted?: boolean;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   category,
   onAddToCart,
+  isHighlighted = false,
 }) => {
   const [quantity, setQuantity] = useState<number>(1);
   const [justAdded, setJustAdded] = useState<boolean>(false);
@@ -44,7 +46,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   return (
     <div
       id={`product-${product.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`}
-      className="group bg-white rounded-2xl border border-[#ECE2D5] hover:border-[#DFCBB5] shadow-xs hover:shadow-md transition-all duration-300 flex flex-col overflow-hidden"
+      data-product-name={product.name}
+      className={`group bg-white rounded-2xl border ${
+        isHighlighted
+          ? 'border-[#B45309] ring-4 ring-[#B45309]/40 shadow-xl scale-[1.02]'
+          : 'border-[#ECE2D5] hover:border-[#DFCBB5] shadow-xs hover:shadow-md'
+      } transition-all duration-300 flex flex-col overflow-hidden`}
     >
       {/* Product Image Area */}
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-[#F5EFEB]">
@@ -78,7 +85,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
               {product.name}
             </h3>
             <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-              {product.originalPrice && product.originalPrice > product.price && (
+              {((product.onOffer && product.originalPrice !== undefined) ||
+                (product.originalPrice !== undefined && product.originalPrice > product.price)) && (
                 <span className="text-xs text-[#9C7F6E] line-through">
                   ₹{product.originalPrice}
                 </span>
