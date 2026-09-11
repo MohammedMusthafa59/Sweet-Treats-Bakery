@@ -4,6 +4,9 @@ export interface Product {
   imageUrl: string;
   description: string;
   category?: string;
+  onOffer?: boolean;
+  originalPrice?: number;
+  discount?: number;
 }
 
 export interface CartItem {
@@ -13,22 +16,40 @@ export interface CartItem {
 
 export interface CustomerInfo {
   customerName: string;
-  customerContact: string; // phone or email
+  customerEmail: string;
+  customerPhone?: string;
   orderNotes?: string;
 }
 
-export interface WhatsAppOrderDetails {
+export interface RazorpayOrderPayload {
   customerName: string;
-  customerContact: string;
+  customerEmail: string;
   items: Array<{
     name: string;
     qty: number;
     price: number;
   }>;
   total: number;
-  whatsAppUrl: string;
-  formattedMessage: string;
+  order_id: string;
+  payment_id: string;
+  signature: string;
+}
+
+export interface OrderConfirmationDetails {
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  items: Array<{
+    name: string;
+    qty: number;
+    price: number;
+  }>;
+  total: number;
+  paymentId?: string;
+  orderId?: string;
+  channel: 'Razorpay' | 'WhatsApp';
   createdAt: string;
+  whatsAppUrl?: string;
 }
 
 export type PolicyType =
@@ -43,4 +64,3 @@ export interface ApiProductResponse {
   categories?: Record<string, Product[]>;
   message?: string;
 }
-

@@ -1,11 +1,25 @@
 import React, { useEffect } from 'react';
-import { WhatsAppOrderDetails } from '../types';
+import { OrderConfirmationDetails } from '../types';
 import confetti from 'canvas-confetti';
-import { CheckCircle2, ShoppingBag, MessageCircle, ExternalLink, Sparkles, Clock, User, PhoneCall, Copy, Check } from 'lucide-react';
+import {
+  CheckCircle2,
+  ShoppingBag,
+  MessageCircle,
+  ExternalLink,
+  Sparkles,
+  Clock,
+  User,
+  Mail,
+  Receipt,
+  Check,
+  CreditCard,
+  ShieldCheck,
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { WHATSAPP_PHONE_NUMBER } from '../utils/whatsapp';
 
 interface OrderSuccessModalProps {
-  order: WhatsAppOrderDetails | null;
+  order: OrderConfirmationDetails | null;
   onClose: () => void;
 }
 
@@ -19,24 +33,27 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
     if (order) {
       try {
         confetti({
-          particleCount: 75,
-          spread: 70,
-          origin: { y: 0.6 },
-          colors: ['#059669', '#10B981', '#B45309', '#F59E0B', '#FBBF24'],
+          particleCount: 85,
+          spread: 80,
+          origin: { y: 0.5 },
+          colors: ['#059669', '#10B981', '#B45309', '#F59E0B', '#FBBF24', '#D97706'],
         });
       } catch {
-        // Safe if canvas-confetti fails
+        // Fallback gracefully if confetti unavailable
       }
     }
   }, [order]);
 
   if (!order) return null;
 
-  const handleCopyMessage = () => {
-    if (!order) return;
-    navigator.clipboard.writeText(order.formattedMessage);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+  const isRazorpay = order.channel === 'Razorpay';
+
+  const handleCopyPaymentId = () => {
+    if (order.paymentId) {
+      navigator.clipboard.writeText(order.paymentId);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
   };
 
   return (
@@ -47,6 +64,7 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
+          onClick={onClose}
           className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
         />
 
@@ -58,8 +76,8 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
           transition={{ type: 'spring', damping: 25, stiffness: 300 }}
           className="relative w-full max-w-lg bg-[#FAF7F2] rounded-3xl border border-[#E2D4C3] shadow-2xl overflow-hidden z-10 my-8"
         >
-          {/* Top Banner */}
-          <div className="bg-gradient-to-br from-emerald-600 to-teal-800 text-white p-6 text-center relative overflow-hidden">
+          {/* Top Celebration Banner */}
+          <div className="bg-gradient-to-br from-[#15803D] via-[#166534] to-[#14532D] text-white p-6 text-center relative overflow-hidden">
             <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-white/10 rounded-full blur-xl" />
             <div className="absolute bottom-0 left-0 -ml-8 -mb-8 w-32 h-32 bg-emerald-400/10 rounded-full blur-xl" />
 
@@ -67,16 +85,18 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
               <CheckCircle2 className="w-8 h-8 text-white" />
             </div>
 
-            <span className="inline-flex items-center gap-1 px-3 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white mb-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold bg-white/20 text-white mb-2">
               <Sparkles className="w-3.5 h-3.5 text-yellow-300" />
-              WhatsApp Handoff Ready
+              <span>{isRazorpay ? 'Payment Verified & Confirmed' : 'WhatsApp Order Received'}</span>
             </span>
 
             <h2 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-white mb-1">
-              Order Dispatched to WhatsApp!
+              Thank you, your order has been placed!
             </h2>
-            <p className="text-xs sm:text-sm text-emerald-100 max-w-sm mx-auto">
-              Please send the pre-filled message in your WhatsApp chat with +91 9486123975 to complete your confirmation.
+            <p className="text-xs sm:text-sm text-emerald-100 max-w-sm mx-auto leading-relaxed">
+              {isRazorpay
+                ? 'Your payment was successfully processed. Our pastry chefs are preparing your freshly baked goodies!'
+                : 'Your order was dispatched to our kitchen team. Please send the pre-filled message on WhatsApp to complete confirmation.'}
             </p>
           </div>
 
@@ -88,90 +108,115 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
                 <span className="text-[11px] text-[#8C6F5E] flex items-center gap-1">
                   <User className="w-3 h-3 text-[#B45309]" /> Customer
                 </span>
-                <span className="font-bold text-[#2E190F] block truncate">
+                <span className="font-bold text-[#2E190F] block truncate text-xs sm:text-sm">
                   {order.customerName}
                 </span>
               </div>
+
               <div className="space-y-0.5">
                 <span className="text-[11px] text-[#8C6F5E] flex items-center gap-1">
-                  <PhoneCall className="w-3 h-3 text-[#B45309]" /> Contact
+                  <Mail className="w-3 h-3 text-[#B45309]" /> Contact
                 </span>
-                <span className="font-semibold text-[#2E190F] block truncate">
-                  {order.customerContact}
-                </span>
-              </div>
-              <div className="space-y-0.5 col-span-2 pt-2 border-t border-[#F5EDE3] flex items-center justify-between">
-                <span className="text-[11px] text-[#8C6F5E] flex items-center gap-1">
-                  <Clock className="w-3 h-3 text-emerald-600" /> WhatsApp Number
-                </span>
-                <span className="font-mono font-bold text-emerald-700">
-                  +91 9486123975
+                <span className="font-semibold text-[#2E190F] block truncate text-xs">
+                  {order.customerEmail || order.customerPhone || 'Recorded'}
                 </span>
               </div>
+
+              {isRazorpay && order.paymentId && (
+                <div className="col-span-2 pt-2 border-t border-[#F2EAE0] flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <span className="text-[10px] text-[#8C6F5E] uppercase tracking-wider flex items-center gap-1">
+                      <CreditCard className="w-3 h-3 text-emerald-600" /> Razorpay Payment ID
+                    </span>
+                    <span className="font-mono font-semibold text-[#1F2937] text-xs">
+                      {order.paymentId}
+                    </span>
+                  </div>
+                  <button
+                    onClick={handleCopyPaymentId}
+                    className="px-2.5 py-1 text-[11px] font-medium text-[#7C5A47] hover:text-[#2E190F] bg-[#FAF7F2] hover:bg-[#EDE3D6] rounded-md transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    {copied ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-600" />
+                        <span>Copied!</span>
+                      </>
+                    ) : (
+                      <span>Copy ID</span>
+                    )}
+                  </button>
+                </div>
+              )}
             </div>
 
-            {/* Items Summary Table */}
-            <div className="bg-white rounded-2xl border border-[#ECE0D2] overflow-hidden">
-              <div className="p-3 bg-[#F9F5F0] border-b border-[#ECE0D2] font-semibold text-[#5B3E2F] flex justify-between">
-                <span>Items Ordered</span>
-                <span>Subtotal</span>
-              </div>
-              <div className="p-3 space-y-2 max-h-32 overflow-y-auto divide-y divide-[#F5EDE3]">
+            {/* Items Purchased List */}
+            <div className="bg-white rounded-2xl p-4 border border-[#ECE0D2]">
+              <h4 className="font-semibold text-[#3B2215] mb-2 pb-1.5 border-b border-[#F4EBE2] flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <ShoppingBag className="w-3.5 h-3.5 text-[#B45309]" />
+                  <span>Treats in this Order</span>
+                </span>
+                <span className="text-[11px] font-normal text-[#8C6F5E]">
+                  {order.items.length} item{order.items.length === 1 ? '' : 's'}
+                </span>
+              </h4>
+
+              <div className="divide-y divide-[#F7EFE7] max-h-36 overflow-y-auto pr-1">
                 {order.items.map((item, idx) => (
-                  <div key={idx} className="pt-2 first:pt-0 flex justify-between items-center">
+                  <div key={idx} className="py-2 flex items-center justify-between text-xs">
                     <div>
-                      <span className="font-medium text-[#2E190F] block">
-                        {item.name}
-                      </span>
-                      <span className="text-[11px] text-[#8C6F5E]">
-                        Qty: {item.qty} × ₹{item.price}
-                      </span>
+                      <span className="font-semibold text-[#2E190F]">{item.name}</span>
+                      <span className="text-[#8C6F5E] ml-2 text-[11px]">x{item.qty}</span>
                     </div>
-                    <span className="font-bold text-[#8C3A16]">
-                      ₹{(item.qty * item.price).toLocaleString()}
+                    <span className="font-semibold text-[#9A3412]">
+                      ₹{(item.price * item.qty).toLocaleString()}
                     </span>
                   </div>
                 ))}
               </div>
-              <div className="p-3 bg-[#FAF7F2] border-t border-[#ECE0D2] flex justify-between items-baseline">
-                <span className="font-bold text-[#2E190F]">Total</span>
-                <span className="font-sans text-base font-extrabold text-[#9A3412]">
-                  ₹{order.total.toLocaleString()}
+
+              {/* Total Row */}
+              <div className="pt-3 mt-2 border-t-2 border-[#EEDBCC] flex items-center justify-between font-bold text-sm text-[#2E190F]">
+                <span>Total Amount {isRazorpay && <span className="text-emerald-700 text-xs font-normal">(Paid)</span>}</span>
+                <span className="text-base text-[#9A3412]">₹{order.total.toLocaleString()}</span>
+              </div>
+            </div>
+
+            {/* Delivery/Kitchen Info */}
+            <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3 flex items-start gap-2.5 text-[11px] text-[#7A5B4C]">
+              <Clock className="w-4 h-4 text-[#B45309] shrink-0 mt-0.5" />
+              <div>
+                <strong className="text-[#3B2215] block">Fresh Kitchen Timings</strong>
+                <span>
+                  Baking batches dispatch daily 8:00 AM – 11:30 AM &amp; 3:00 PM – 6:00 PM. Handcrafted fresh with pure butter and Belgian cocoa.
                 </span>
               </div>
             </div>
 
-            {/* Re-open WhatsApp & Copy Actions */}
-            <div className="space-y-2 pt-1">
+            {/* Support link */}
+            <div className="text-center pt-1">
               <a
-                href={order.whatsAppUrl}
+                href={`https://wa.me/${WHATSAPP_PHONE_NUMBER}?text=${encodeURIComponent(
+                  `Hi Choco House! I have a question regarding my order (${isRazorpay ? `Payment ID: ${order.paymentId}` : `Name: ${order.customerName}`}) for ₹${order.total}.`
+                )}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs sm:text-sm font-bold rounded-xl shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 text-xs text-emerald-700 hover:text-emerald-800 hover:underline font-semibold"
               >
-                <MessageCircle className="w-4 h-4 fill-white/20" />
-                <span>Re-open WhatsApp Chat</span>
-                <ExternalLink className="w-3.5 h-3.5 ml-1" />
+                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Need assistance? Chat with us on WhatsApp</span>
               </a>
+            </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCopyMessage}
-                  className="flex-1 py-2.5 px-3 bg-white hover:bg-[#F2EAE0] text-[#5C3B28] text-xs font-semibold rounded-xl border border-[#DAC9B7] transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copied ? 'Copied to Clipboard' : 'Copy Message Text'}</span>
-                </button>
-
-                <button
-                  id="place-another-order-button"
-                  onClick={onClose}
-                  className="flex-1 py-2.5 px-3 bg-[#B45309] hover:bg-[#92400E] text-white text-xs font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <ShoppingBag className="w-3.5 h-3.5" />
-                  <span>Browse More Treats</span>
-                </button>
-              </div>
+            {/* Action Buttons */}
+            <div className="pt-2">
+              <button
+                id="close-order-success-btn"
+                onClick={onClose}
+                className="w-full py-3 bg-[#B45309] hover:bg-[#92400E] active:scale-98 text-white font-semibold rounded-xl text-xs sm:text-sm transition-all shadow-xs cursor-pointer"
+              >
+                Continue Browsing Menu
+              </button>
             </div>
           </div>
         </motion.div>

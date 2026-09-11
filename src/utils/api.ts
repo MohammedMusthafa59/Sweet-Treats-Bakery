@@ -162,7 +162,10 @@ export async function submitBakeryOrder(order: Record<string, any>): Promise<{ s
     const text = await response.text();
     try {
       const parsed = JSON.parse(text);
-      return { success: parsed.success ?? true, message: parsed.message || 'Order saved' };
+      if (parsed && parsed.success === false) {
+        return { success: false, message: parsed.message || 'Verification failed.' };
+      }
+      return { success: true, message: parsed?.message || 'Order saved' };
     } catch {
       return { success: true, message: 'Order submitted' };
     }

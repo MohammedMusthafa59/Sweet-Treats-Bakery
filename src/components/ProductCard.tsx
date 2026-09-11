@@ -61,6 +61,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         <span className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#FAF7F2]/90 backdrop-blur-xs text-[#7A3E1D] border border-[#E8DACB] shadow-2xs">
           {category}
         </span>
+
+        {/* Offer Badge if onOffer */}
+        {product.onOffer && (
+          <span className="absolute top-2.5 right-2.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#DC2626] text-white shadow-xs tracking-wider uppercase">
+            Offer
+          </span>
+        )}
       </div>
 
       {/* Card Content Area */}
@@ -70,9 +77,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             <h3 className="font-display text-base sm:text-lg font-semibold text-[#2F180E] group-hover:text-[#9A3412] transition-colors line-clamp-1">
               {product.name}
             </h3>
-            <span className="font-sans font-bold text-base sm:text-lg text-[#9A3412] whitespace-nowrap">
-              ₹{product.price}
-            </span>
+            <div className="flex items-baseline gap-1.5 whitespace-nowrap">
+              {product.originalPrice && product.originalPrice > product.price && (
+                <span className="text-xs text-[#9C7F6E] line-through">
+                  ₹{product.originalPrice}
+                </span>
+              )}
+              <span className="font-sans font-bold text-base sm:text-lg text-[#9A3412]">
+                ₹{product.price}
+              </span>
+            </div>
           </div>
 
           <p className="text-xs sm:text-sm text-[#735A4C] line-clamp-2 leading-relaxed mb-4">

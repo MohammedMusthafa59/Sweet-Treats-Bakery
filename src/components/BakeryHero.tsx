@@ -22,7 +22,7 @@ export const BakeryHero: React.FC<BakeryHeroProps> = ({ onExploreClick }) => {
             </h2>
 
             <p className="text-sm sm:text-base text-[#6B4E3F] max-w-xl mx-auto lg:mx-0 leading-relaxed">
-              Every creation at <strong className="text-[#3B1E12]">Sweet Treats</strong> is slow-baked with pure European butter, Belgian cocoa, farm cream, and seasonal fruits. Browse our live kitchen menu below and order your favorites with direct WhatsApp kitchen handoff.
+              Every creation at <strong className="text-[#3B1E12]">Sweet Treats</strong> is slow-baked with pure European butter, Belgian cocoa, farm cream, and seasonal fruits. Browse our live kitchen menu below and enjoy seamless ordering with secure Razorpay checkout or direct WhatsApp handoff.
             </p>
 
             <div className="pt-2 flex flex-wrap items-center justify-center lg:justify-start gap-4">

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Product, CartItem, CustomerInfo, WhatsAppOrderDetails, PolicyType } from './types';
-import { fetchBakeryProducts, submitBakeryOrder } from './utils/api';
+import { Product, CartItem, OrderConfirmationDetails, PolicyType } from './types';
+import { fetchBakeryProducts } from './utils/api';
 import { Header } from './components/Header';
 import { BakeryHero } from './components/BakeryHero';
 import { CategoryNav } from './components/CategoryNav';
@@ -32,7 +32,7 @@ export default function App() {
 
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
-  const [confirmedOrder, setConfirmedOrder] = useState<WhatsAppOrderDetails | null>(null);
+  const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmationDetails | null>(null);
   const [activePolicy, setActivePolicy] = useState<PolicyType | null>(null);
 
   const menuSectionRef = useRef<HTMLDivElement>(null);
@@ -155,36 +155,15 @@ export default function App() {
     return result;
   }, [categories, activeCategory, searchQuery]);
 
-  // WhatsApp order placement handler
-  const handleOrderViaWhatsApp = (
-    customerInfo: CustomerInfo,
-    whatsAppUrl: string,
-    formattedMsg: string
-  ) => {
-    const orderDetails: WhatsAppOrderDetails = {
-      customerName: customerInfo.customerName,
-      customerContact: customerInfo.customerContact,
-      items: cart.map((item) => ({
-        name: item.product.name,
-        qty: item.quantity,
-        price: item.product.price,
-      })),
-      total: cartTotalAmount,
-      whatsAppUrl,
-      formattedMessage: formattedMsg,
-      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    };
+  // Order handlers
+  const handlePaymentSuccess = (orderDetails: OrderConfirmationDetails) => {
+    setConfirmedOrder(orderDetails);
+    setCart([]);
+    setIsCheckoutOpen(false);
+    setIsCartOpen(false);
+  };
 
-    // Log order in Google Sheets in background
-    submitBakeryOrder({
-      customerName: customerInfo.customerName,
-      customerContact: customerInfo.customerContact,
-      items: orderDetails.items,
-      total: cartTotalAmount,
-      channel: 'WhatsApp',
-      timestamp: new Date().toISOString(),
-    });
-
+  const handleWhatsAppOrder = (orderDetails: OrderConfirmationDetails) => {
     setConfirmedOrder(orderDetails);
     setCart([]);
     setIsCheckoutOpen(false);
@@ -350,13 +329,14 @@ export default function App() {
         }}
       />
 
-      {/* Checkout Form Modal - WhatsApp Handoff */}
+      {/* Checkout Form Modal - Razorpay with WhatsApp Fallback */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
         items={cart}
         totalAmount={cartTotalAmount}
-        onOrderViaWhatsApp={handleOrderViaWhatsApp}
+        onPaymentSuccess={handlePaymentSuccess}
+        onWhatsAppOrder={handleWhatsAppOrder}
       />
 
       {/* Order Confirmation Screen Modal */}
