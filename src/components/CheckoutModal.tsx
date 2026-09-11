@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { CartItem, OrderConfirmationDetails } from '../types';
 import { loadRazorpayScript, RAZORPAY_KEY_ID, RazorpayPaymentSuccessResponse } from '../utils/razorpay';
-import { submitBakeryOrder } from '../utils/api';
+import { submitBakeryOrder, createRazorpayOrder } from '../utils/api';
 import { buildWhatsAppMessage, buildWhatsAppUrl, WHATSAPP_PHONE_NUMBER } from '../utils/whatsapp';
 import {
   X,
@@ -95,6 +95,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     updateProcessingState(true);
 
     try {
+      // 1. When customer clicks "Pay Now", first send POST request to createOrder with body: { action: "createOrder", amount: <cart total * 100> }
+      const amountInPaise = Math.round(totalAmount * 100);
+      const orderRes = await createRazorpayOrder(amountInPaise);
+
+      // 5. If step 1 fails (success: false), do not open the Razorpay checkout at all — show error message instead
+      if (!orderRes.success || !orderRes.order_id) {
+        setPaymentNotice('Unable to start payment, please try again or order via WhatsApp');
+        updateProcessingState(false);
+        return;
+      }
+
+      const createdOrderId = orderRes.order_id;
+
+      // Ensure Razorpay SDK is loaded
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded || !window.Razorpay) {
         setPaymentNotice('Unable to load Razorpay payment gateway. You can try again or order via WhatsApp instead.');
@@ -102,12 +116,14 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         return;
       }
 
+      // 2 & 3. Update Razorpay checkout options to include order_id returned from step 1
       const options = {
         key: RAZORPAY_KEY_ID,
-        amount: Math.round(totalAmount * 100), // cart total in paise (cart total * 100)
+        amount: amountInPaise,
         currency: 'INR',
         name: 'Choco House',
         description: `${totalItemCount} bakery item${totalItemCount === 1 ? '' : 's'} • Total ₹${totalAmount}`,
+        order_id: createdOrderId,
         prefill: {
           name: customerName.trim(),
           contact: phone.trim(),
@@ -125,7 +141,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         handler: async (response: RazorpayPaymentSuccessResponse) => {
           updateProcessingState(true);
           try {
-            // Send payload to Google Apps Script as specified in prompt
+            // 4. Send payload to Google Apps Script verification with razorpay_order_id and razorpay_signature
             const orderPayload = {
               customerName: customerName.trim(),
               phone: phone.trim(),
@@ -137,7 +153,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
                 price: item.product.price,
               })),
               total: totalAmount,
-              order_id: response.razorpay_order_id || '',
+              order_id: response.razorpay_order_id || createdOrderId,
               payment_id: response.razorpay_payment_id || '',
               signature: response.razorpay_signature || '',
             };
@@ -163,7 +179,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               items: orderPayload.items,
               total: totalAmount,
               paymentId: response.razorpay_payment_id,
-              orderId: response.razorpay_order_id,
+              orderId: response.razorpay_order_id || createdOrderId,
               channel: 'Razorpay',
               createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
@@ -181,7 +197,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
               items: items.map((i) => ({ name: i.product.name, qty: i.quantity, price: i.product.price })),
               total: totalAmount,
               paymentId: response.razorpay_payment_id,
-              orderId: response.razorpay_order_id,
+              orderId: response.razorpay_order_id || createdOrderId,
               channel: 'Razorpay',
               createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             };
@@ -203,7 +219,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
     } catch (err) {
       console.error('Razorpay initialization error:', err);
       updateProcessingState(false);
-      setPaymentNotice('Payment was not completed — you can try again or order via WhatsApp instead.');
+      setPaymentNotice('Unable to start payment, please try again or order via WhatsApp');
     }
   };
 

@@ -12,6 +12,7 @@ export interface RazorpayOptions {
   currency: string;
   name: string;
   description: string;
+  order_id?: string;
   image?: string;
   prefill?: {
     name?: string;

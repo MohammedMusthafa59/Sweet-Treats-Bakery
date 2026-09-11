@@ -187,6 +187,55 @@ export async function fetchApiVersion(): Promise<string | null> {
   }
 }
 
+export interface RazorpayOrderResponse {
+  success: boolean;
+  order_id?: string;
+  amount?: number;
+  message?: string;
+}
+
+export async function createRazorpayOrder(amountInPaise: number): Promise<RazorpayOrderResponse> {
+  try {
+    const response = await fetch(GOOGLE_SCRIPT_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify({
+        action: 'createOrder',
+        amount: amountInPaise,
+      }),
+    });
+
+    const text = await response.text();
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed && (parsed.success === true || parsed.order_id)) {
+        return {
+          success: true,
+          order_id: parsed.order_id,
+          amount: parsed.amount,
+        };
+      }
+      return {
+        success: false,
+        message: parsed?.message || 'Unable to start payment, please try again or order via WhatsApp',
+      };
+    } catch {
+      return {
+        success: false,
+        message: 'Unable to start payment, please try again or order via WhatsApp',
+      };
+    }
+  } catch (error) {
+    console.error('Error creating Razorpay order:', error);
+    return {
+      success: false,
+      message: 'Unable to start payment, please try again or order via WhatsApp',
+    };
+  }
+}
+
 export async function submitBakeryOrder(order: Record<string, any>): Promise<{ success: boolean; message?: string }> {
   try {
     const response = await fetch(GOOGLE_SCRIPT_API_URL, {
