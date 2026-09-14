@@ -9,9 +9,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { PolicyModal } from './components/PolicyModal';
-import { MyOrdersModal } from './components/MyOrdersModal';
 import { FloatingCartButton } from './components/FloatingCartButton';
-import { refreshPendingOrders, hasPendingOrders, ORDER_HISTORY_EVENT } from './utils/orderHistory';
 import { ShutdownOverlay } from './components/ShutdownOverlay';
 import { AnnouncementModal } from './components/AnnouncementModal';
 import { DynamicAnnouncementBanner } from './components/DynamicAnnouncementBanner';
@@ -74,7 +72,6 @@ export default function App() {
   const [isPaymentProcessing, setIsPaymentProcessing] = useState<boolean>(false);
   const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmationDetails | null>(null);
   const [activePolicy, setActivePolicy] = useState<PolicyType | null>(null);
-  const [isOrdersOpen, setIsOrdersOpen] = useState<boolean>(false);
 
   const menuSectionRef = useRef<HTMLDivElement>(null);
 
@@ -234,51 +231,6 @@ export default function App() {
     }, 8000);
 
     return () => clearInterval(interval);
-  }, []);
-
-  // Continuous auto status-check (via orderStatus API) for orders marked "Pending"
-  useEffect(() => {
-    let isChecking = false;
-
-    const checkPendingOrders = async () => {
-      if (isChecking) return;
-      if (!hasPendingOrders()) return;
-
-      isChecking = true;
-      try {
-        await refreshPendingOrders();
-      } catch (err) {
-        console.warn('Background order status check error:', err);
-      } finally {
-        isChecking = false;
-      }
-    };
-
-    // 1. Check on app load / mount
-    checkPendingOrders();
-
-    // 2. Poll every 8 seconds whenever there are orders marked "Pending"
-    const interval = setInterval(() => {
-      checkPendingOrders();
-    }, 8000);
-
-    // 3. Immediately check when tab regains focus or visibility (e.g. user returns from UPI app)
-    const handleFocusOrVisible = () => {
-      if (document.visibilityState === 'visible') {
-        checkPendingOrders();
-      }
-    };
-
-    window.addEventListener('visibilitychange', handleFocusOrVisible);
-    window.addEventListener('focus', handleFocusOrVisible);
-    window.addEventListener(ORDER_HISTORY_EVENT, checkPendingOrders);
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('visibilitychange', handleFocusOrVisible);
-      window.removeEventListener('focus', handleFocusOrVisible);
-      window.removeEventListener(ORDER_HISTORY_EVENT, checkPendingOrders);
-    };
   }, []);
 
   // Cart actions
@@ -478,7 +430,6 @@ export default function App() {
         cartItemCount={totalItemCount}
         cartTotal={cartTotalAmount}
         onOpenCart={() => setIsCartOpen(true)}
-        onOpenOrders={() => setIsOrdersOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -651,13 +602,6 @@ export default function App() {
       <OrderSuccessModal
         order={confirmedOrder}
         onClose={() => setConfirmedOrder(null)}
-        onViewOrders={() => setIsOrdersOpen(true)}
-      />
-
-      {/* My Orders History Modal (Browser Local Storage & Live Server Verification) */}
-      <MyOrdersModal
-        isOpen={isOrdersOpen}
-        onClose={() => setIsOrdersOpen(false)}
       />
 
       {/* Customer Policy Modal */}

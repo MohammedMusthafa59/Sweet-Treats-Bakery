@@ -13,7 +13,6 @@ import {
   MapPin,
   Check,
   CreditCard,
-  Receipt,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { WHATSAPP_PHONE_NUMBER } from '../utils/whatsapp';
@@ -21,13 +20,11 @@ import { WHATSAPP_PHONE_NUMBER } from '../utils/whatsapp';
 interface OrderSuccessModalProps {
   order: OrderConfirmationDetails | null;
   onClose: () => void;
-  onViewOrders?: () => void;
 }
 
 export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
   order,
   onClose,
-  onViewOrders,
 }) => {
   const [copied, setCopied] = React.useState(false);
 
@@ -236,23 +233,10 @@ export const OrderSuccessModal: React.FC<OrderSuccessModalProps> = ({
 
             {/* Action Buttons */}
             <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
-              {onViewOrders && (
-                <button
-                  id="view-in-my-orders-btn"
-                  onClick={() => {
-                    onClose();
-                    onViewOrders();
-                  }}
-                  className="flex-1 py-2.5 sm:py-3 bg-[#2E160D] hover:bg-[#1E0D06] text-[#FDE68A] font-semibold rounded-xl text-xs sm:text-sm border border-[#522D1B] transition-all shadow-xs flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Receipt className="w-4 h-4 text-[#FDE68A]" />
-                  <span>View in My Orders</span>
-                </button>
-              )}
               <button
                 id="close-order-success-btn"
                 onClick={onClose}
-                className="flex-1 py-2.5 sm:py-3 bg-[#B45309] hover:bg-[#92400E] active:scale-98 text-white font-semibold rounded-xl text-xs sm:text-sm transition-all shadow-xs cursor-pointer"
+                className="w-full py-2.5 sm:py-3 bg-[#B45309] hover:bg-[#92400E] active:scale-98 text-white font-semibold rounded-xl text-xs sm:text-sm transition-all shadow-xs cursor-pointer text-center"
               >
                 Continue Browsing
               </button>

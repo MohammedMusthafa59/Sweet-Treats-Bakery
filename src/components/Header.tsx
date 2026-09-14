@@ -1,11 +1,10 @@
 import React from 'react';
-import { ShoppingBag, Search, Receipt } from 'lucide-react';
+import { ShoppingBag, Search } from 'lucide-react';
 
 interface HeaderProps {
   cartItemCount: number;
   cartTotal: number;
   onOpenCart: () => void;
-  onOpenOrders: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
 }
@@ -14,7 +13,6 @@ export const Header: React.FC<HeaderProps> = ({
   cartItemCount,
   cartTotal,
   onOpenCart,
-  onOpenOrders,
   searchQuery,
   onSearchChange,
 }) => {
@@ -66,17 +64,6 @@ export const Header: React.FC<HeaderProps> = ({
 
           {/* Header Action Buttons */}
           <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* My Orders Button */}
-            <button
-              id="header-my-orders-button"
-              onClick={onOpenOrders}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-2 sm:py-2.5 bg-white/80 hover:bg-white text-[#3B1E12] hover:text-[#B45309] border border-[#E2D5C3] hover:border-[#CBB49E] rounded-full shadow-xs hover:shadow-sm active:scale-95 transition-all text-xs sm:text-sm font-medium cursor-pointer"
-              aria-label="View My Orders"
-            >
-              <Receipt className="w-4 h-4 text-[#B45309]" />
-              <span>My Orders</span>
-            </button>
-
             {/* Cart Trigger Button */}
             <button
               id="header-cart-button"

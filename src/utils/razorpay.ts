@@ -1,4 +1,4 @@
-export const RAZORPAY_KEY_ID = 'rzp_live_TafcYlkZUrgJHd';
+export const RAZORPAY_KEY_ID = 'rzp_live_TbszevH18c3CIr';
 
 export interface RazorpayPaymentSuccessResponse {
   razorpay_payment_id: string;

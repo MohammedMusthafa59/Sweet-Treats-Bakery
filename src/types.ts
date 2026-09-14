@@ -1,20 +1,3 @@
-export type OrderStatus = 'Pending' | 'Paid' | 'Failed' | 'Cancelled';
-
-export interface StoredOrderItem {
-  name: string;
-  qty: number;
-  price: number;
-}
-
-export interface StoredOrder {
-  orderId: string;
-  timestamp: string; // ISO date string
-  items: StoredOrderItem[];
-  total: number;
-  paymentId: string | null;
-  status: OrderStatus;
-}
-
 export interface Product {
   name: string;
   price: number;
