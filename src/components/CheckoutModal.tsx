@@ -131,6 +131,9 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         return;
       }
 
+      // Track whether Razorpay explicitly reported a failure or cancellation event
+      let explicitFailureEvent: 'Cancelled' | 'Failed' | null = null;
+
       // 2 & 3. Update Razorpay checkout options to include order_id returned from step 1
       const options = {
         key: RAZORPAY_KEY_ID,
@@ -150,9 +153,15 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         modal: {
           ondismiss: () => {
             updateProcessingState(false);
-            // Update status to Cancelled if payment was dismissed without completing
-            updateOrderStatus(createdOrderId, 'Cancelled');
-            setPaymentNotice('Payment was not completed — you can try again or order via WhatsApp instead.');
+            // When closed WITHOUT an explicit failure or cancellation event from Razorpay
+            // (i.e. user closed it or it timed out), mark local order status as "Pending" — NOT "Cancelled".
+            // Only mark "Cancelled" if Razorpay explicitly reported payment was cancelled or failed.
+            if (!explicitFailureEvent) {
+              updateOrderStatus(createdOrderId, 'Pending');
+              setPaymentNotice(
+                'Payment popup was closed. Your order is kept in "Pending" status. If you completed payment via UPI/Netbanking, check its live status under "My Orders".'
+              );
+            }
           },
         },
         handler: async (response: RazorpayPaymentSuccessResponse) => {
@@ -234,11 +243,22 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
       const rzpInstance = new window.Razorpay(options);
 
       rzpInstance.on('payment.failed', (response: any) => {
-        console.warn('Razorpay payment failed:', response);
-        // Update status to Failed
-        updateOrderStatus(createdOrderId, 'Failed');
+        console.warn('Razorpay payment explicitly reported failure/cancellation:', response);
+        const errorObj = response?.error || {};
+        const reason = String(errorObj.reason || errorObj.description || errorObj.code || '').toLowerCase();
+
+        // Only mark "Cancelled" if Razorpay explicitly reports the payment was cancelled
+        const isCancelled = reason.includes('cancel');
+        const failureStatus: 'Cancelled' | 'Failed' = isCancelled ? 'Cancelled' : 'Failed';
+        explicitFailureEvent = failureStatus;
+
+        updateOrderStatus(createdOrderId, failureStatus);
         updateProcessingState(false);
-        setPaymentNotice('Payment was not completed — you can try again or order via WhatsApp instead.');
+        setPaymentNotice(
+          isCancelled
+            ? 'Payment was cancelled. You can try again or order via WhatsApp.'
+            : 'Payment was not completed — you can try again or order via WhatsApp instead.'
+        );
       });
 
       rzpInstance.open();

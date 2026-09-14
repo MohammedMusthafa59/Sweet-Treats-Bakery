@@ -49,12 +49,16 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
     return sorted;
   }, []);
 
-  // Automatic live refresh on opening for any pending order (Requirement 4)
-  const performRefresh = useCallback(async (currentList?: StoredOrder[]) => {
+  // Automatic live refresh on opening and periodic polling for any pending order (Requirement 4)
+  const performRefresh = useCallback(async (currentList?: StoredOrder[], isManual: boolean = false) => {
     const listToCheck = currentList || getOrderHistory();
     const hasPending = listToCheck.some((o) => o.status === 'Pending');
 
     if (!hasPending) {
+      if (isManual) {
+        setRefreshNotice('All orders are up to date');
+        setTimeout(() => setRefreshNotice(null), 2500);
+      }
       return;
     }
 
@@ -73,6 +77,8 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
 
       if (updatedCount > 0) {
         setRefreshNotice(`Updated ${updatedCount} order status${updatedCount === 1 ? '' : 'es'}`);
+      } else if (isManual) {
+        setRefreshNotice('Status checked — still awaiting bank/gateway confirmation');
       } else {
         setRefreshNotice(null);
       }
@@ -98,7 +104,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
           updateOrderStatus(orderId, 'Paid', payId);
         } else if (norm === 'failed') {
           updateOrderStatus(orderId, 'Failed');
-        } else if (norm === 'cancelled') {
+        } else if (norm === 'cancelled' || norm === 'canceled') {
           updateOrderStatus(orderId, 'Cancelled');
         }
       }
@@ -111,10 +117,20 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
   };
 
   useEffect(() => {
-    if (isOpen) {
-      const loaded = loadOrders();
-      performRefresh(loaded);
-    }
+    if (!isOpen) return;
+
+    const loaded = loadOrders();
+    performRefresh(loaded);
+
+    // Auto status-check polling every 6 seconds while modal is open if any order is Pending
+    const interval = setInterval(() => {
+      const current = getOrderHistory();
+      if (current.some((o) => o.status === 'Pending')) {
+        performRefresh(current);
+      }
+    }, 6000);
+
+    return () => clearInterval(interval);
   }, [isOpen, loadOrders, performRefresh]);
 
   // Listen to orderHistory updates from other actions or windows
@@ -249,7 +265,7 @@ export const MyOrdersModal: React.FC<MyOrdersModalProps> = ({ isOpen, onClose })
                 {orders.length > 0 && (
                   <button
                     id="refresh-order-status-button"
-                    onClick={() => performRefresh()}
+                    onClick={() => performRefresh(undefined, true)}
                     disabled={isRefreshing}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-[#2E1A10] hover:bg-[#3E2316] text-[#EADFCF] hover:text-white rounded-lg text-xs font-medium border border-[#4D2E1F] transition-all cursor-pointer disabled:opacity-50"
                     title="Refresh payment status from server"

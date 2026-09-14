@@ -98,6 +98,18 @@ export function updateOrderStatus(
 }
 
 /**
+ * Returns true if there is at least one order in local storage marked 'Pending'.
+ */
+export function hasPendingOrders(): boolean {
+  try {
+    const list = getOrderHistory();
+    return list.some((order) => order.status === 'Pending');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Calls the Google Apps Script action=orderStatus endpoint for an order.
  * https://script.google.com/macros/s/.../exec?action=orderStatus&order_id=<orderId>
  */
@@ -124,8 +136,14 @@ export async function fetchServerOrderStatus(orderId: string): Promise<{
       return null;
     }
 
-    const data = await res.json();
-    return data;
+    const text = await res.text();
+    try {
+      const data = JSON.parse(text);
+      return data;
+    } catch {
+      console.warn(`Non-JSON response for order ${orderId}:`, text);
+      return null;
+    }
   } catch (err) {
     console.warn(`Error checking server status for order ${orderId}:`, err);
     return null;
@@ -183,7 +201,7 @@ export async function refreshPendingOrders(
           ...order,
           status: 'Failed' as OrderStatus,
         };
-      } else if (normalized === 'cancelled') {
+      } else if (normalized === 'cancelled' || normalized === 'canceled') {
         hasChanges = true;
         updatedCount++;
         return {
