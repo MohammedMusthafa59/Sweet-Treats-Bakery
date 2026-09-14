@@ -9,6 +9,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { OrderSuccessModal } from './components/OrderSuccessModal';
 import { PolicyModal } from './components/PolicyModal';
+import { MyOrdersModal } from './components/MyOrdersModal';
 import { FloatingCartButton } from './components/FloatingCartButton';
 import { ShutdownOverlay } from './components/ShutdownOverlay';
 import { AnnouncementModal } from './components/AnnouncementModal';
@@ -72,6 +73,7 @@ export default function App() {
   const [isPaymentProcessing, setIsPaymentProcessing] = useState<boolean>(false);
   const [confirmedOrder, setConfirmedOrder] = useState<OrderConfirmationDetails | null>(null);
   const [activePolicy, setActivePolicy] = useState<PolicyType | null>(null);
+  const [isOrdersOpen, setIsOrdersOpen] = useState<boolean>(false);
 
   const menuSectionRef = useRef<HTMLDivElement>(null);
 
@@ -430,6 +432,7 @@ export default function App() {
         cartItemCount={totalItemCount}
         cartTotal={cartTotalAmount}
         onOpenCart={() => setIsCartOpen(true)}
+        onOpenOrders={() => setIsOrdersOpen(true)}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
       />
@@ -602,6 +605,13 @@ export default function App() {
       <OrderSuccessModal
         order={confirmedOrder}
         onClose={() => setConfirmedOrder(null)}
+        onViewOrders={() => setIsOrdersOpen(true)}
+      />
+
+      {/* My Orders History Modal (Browser Local Storage & Live Server Verification) */}
+      <MyOrdersModal
+        isOpen={isOrdersOpen}
+        onClose={() => setIsOrdersOpen(false)}
       />
 
       {/* Customer Policy Modal */}

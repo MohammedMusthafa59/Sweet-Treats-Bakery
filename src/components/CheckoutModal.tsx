@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { CartItem, OrderConfirmationDetails } from '../types';
 import { loadRazorpayScript, RAZORPAY_KEY_ID, RazorpayPaymentSuccessResponse } from '../utils/razorpay';
 import { submitBakeryOrder, createRazorpayOrder } from '../utils/api';
+import { saveOrderAttempt, updateOrderStatus } from '../utils/orderHistory';
 import { buildWhatsAppMessage, buildWhatsAppUrl, WHATSAPP_PHONE_NUMBER } from '../utils/whatsapp';
 import {
   X,
@@ -108,6 +109,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
       const createdOrderId = orderRes.order_id;
 
+      // 1. STORE ORDER ATTEMPTS LOCALLY under key "orderHistory"
+      saveOrderAttempt({
+        orderId: createdOrderId,
+        timestamp: new Date().toISOString(),
+        items: items.map((item) => ({
+          name: item.product.name,
+          qty: item.quantity,
+          price: item.product.price,
+        })),
+        total: totalAmount,
+        paymentId: null,
+        status: 'Pending',
+      });
+
       // Ensure Razorpay SDK is loaded
       const isLoaded = await loadRazorpayScript();
       if (!isLoaded || !window.Razorpay) {
@@ -135,11 +150,20 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
         modal: {
           ondismiss: () => {
             updateProcessingState(false);
+            // Update status to Cancelled if payment was dismissed without completing
+            updateOrderStatus(createdOrderId, 'Cancelled');
             setPaymentNotice('Payment was not completed — you can try again or order via WhatsApp instead.');
           },
         },
         handler: async (response: RazorpayPaymentSuccessResponse) => {
           updateProcessingState(true);
+          // 2. UPDATE STATUS ON PAYMENT COMPLETION: Razorpay reports success
+          updateOrderStatus(
+            response.razorpay_order_id || createdOrderId,
+            'Paid',
+            response.razorpay_payment_id || null
+          );
+
           try {
             // 4. Send payload to Google Apps Script verification with razorpay_order_id and razorpay_signature
             const orderPayload = {
@@ -211,6 +235,8 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
 
       rzpInstance.on('payment.failed', (response: any) => {
         console.warn('Razorpay payment failed:', response);
+        // Update status to Failed
+        updateOrderStatus(createdOrderId, 'Failed');
         updateProcessingState(false);
         setPaymentNotice('Payment was not completed — you can try again or order via WhatsApp instead.');
       });
